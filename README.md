@@ -10,7 +10,7 @@ This is a lightweight, single-page web application for calculating ROI on switch
 
 **Tech Stack:**
 - Backend: Node.js + Express
-- Database: SQLite (file: `scenarios.db`)
+- Database: SQLite 
 - Frontend: Vanilla HTML/JS/CSS (no build tools)
 - PDF: pdfmake (server-side)
 - Other: uuid, cors, body-parser
