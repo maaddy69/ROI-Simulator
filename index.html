@@ -1,0 +1,145 @@
+import React, { useState, useEffect } from 'react';
+
+const initialForm = {
+  scenario_name: '',
+  monthly_invoice_volume: 2000,
+  num_ap_staff: 3,
+  avg_hours_per_invoice: 0.17,
+  hourly_wage: 30,
+  error_rate_manual: 0.005,
+  error_cost: 100,
+  time_horizon_months: 36,
+  one_time_implementation_cost: 50000
+};
+
+function App() {
+  const [form, setForm] = useState(initialForm);
+  const [results, setResults] = useState(null);
+  const [scenarios, setScenarios] = useState([]);
+  const [email, setEmail] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+
+  // Fetch saved scenarios
+  useEffect(() => {
+    fetch('http://localhost:5000/scenarios')
+      .then(res => res.json())
+      .then(data => setScenarios(data))
+      .catch(console.error);
+  }, []);
+
+  // Run simulation on form change
+  useEffect(() => {
+    async function simulate() {
+      const response = await fetch('http://localhost:5000/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await response.json();
+      setResults(data);
+    }
+    simulate();
+  }, [form]);
+
+  function saveScenario() {
+    fetch('http://localhost:5000/scenarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form)
+    }).then(res => res.json())
+      .then(() => alert('Scenario saved!'))
+      .catch(console.error);
+  }
+
+  function loadScenario(id) {
+    fetch(`http://localhost:5000/scenarios/${id}`)
+      .then(res => res.json())
+      .then(data => setForm(data))
+      .catch(console.error);
+  }
+
+  function generateReport() {
+    if (!email) return alert('Please enter your email to download the report.');
+    setReportLoading(true);
+    fetch('http://localhost:5000/report/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, scenario: form }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to generate report.');
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${form.scenario_name || 'report'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      })
+      .catch(alert)
+      .finally(() => setReportLoading(false));
+  }
+
+  function onChange(e) {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: name === 'scenario_name' ? value : Number(value) }));
+  }
+
+  return (
+    <div style={{ maxWidth: 600, margin: 'auto', padding: 20 }}>
+      <h1>Invoicing ROI Simulator</h1>
+      <div>
+        <label>Scenario Name</label><br />
+        <input type="text" name="scenario_name" value={form.scenario_name} onChange={onChange} />
+      </div>
+      {['monthly_invoice_volume','num_ap_staff','avg_hours_per_invoice','hourly_wage','error_rate_manual','error_cost','time_horizon_months','one_time_implementation_cost'].map(field => (
+        <div key={field} style={{ marginTop: 10 }}>
+          <label>{field.replace(/_/g, ' ')}</label><br />
+          <input
+            type="number"
+            step="any"
+            name={field}
+            value={form[field]}
+            onChange={onChange}
+          />
+        </div>
+      ))}
+
+      <div style={{ marginTop: 20 }}>
+        <button onClick={saveScenario}>Save Scenario</button>
+        <select onChange={e => loadScenario(e.target.value)} style={{ marginLeft: 10 }}>
+          <option value="">Load Scenario</option>
+          {scenarios.map(s => (
+            <option value={s.id} key={s.id}>{s.scenario_name}</option>
+          ))}
+        </select>
+      </div>
+
+      {results && (
+        <div style={{ marginTop: 20, backgroundColor: '#f0f0f0', padding: 10 }}>
+          <h3>Results</h3>
+          <div>Monthly Savings: ${results.monthly_savings}</div>
+          <div>Cumulative Savings: ${results.cumulative_savings}</div>
+          <div>Net Savings: ${results.net_savings}</div>
+          <div>Payback (Months): {results.payback_months}</div>
+          <div>ROI (%): {results.roi_percentage}</div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 20 }}>
+        <input
+          type="email"
+          placeholder="Enter email to download report"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+        />
+        <button onClick={generateReport} disabled={reportLoading}>
+          {reportLoading ? 'Generating...' : 'Download Report'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default App;
